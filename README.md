@@ -21,6 +21,7 @@ La API queda en `http://localhost:3000/v1`.
 
 - Health check: `GET /v1/health`
 - Swagger: `http://localhost:3000/api/docs`
+- Logs estructurados: Pino (`LOG_LEVEL`, `PRETTY_LOGS`)
 
 ## Documentación
 

@@ -4,16 +4,20 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
-  Logger,
+  Injectable,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { PinoLogger } from 'nestjs-pino';
 import { ApiErrorResponse } from '../errors/api-error-response';
 import { DomainError } from '../errors/domain.error';
 import { ErrorCode } from '../errors/error-codes';
 
+@Injectable()
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
-  private readonly logger = new Logger(GlobalExceptionFilter.name);
+  constructor(private readonly logger: PinoLogger) {
+    this.logger.setContext(GlobalExceptionFilter.name);
+  }
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
@@ -25,12 +29,14 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (errorResponse.statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
         {
-          path: errorResponse.path,
+          path: request.url,
+          method: request.method,
+          requestId: request.headers['x-request-id'],
           code: errorResponse.code,
-          message:
+          errorMessage:
             exception instanceof Error ? exception.message : 'Unknown error',
         },
-        exception instanceof Error ? exception.stack : undefined,
+        'Unhandled application error',
       );
     }
 
