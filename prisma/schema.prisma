@@ -1,0 +1,70 @@
+// Schema aligned with the live PostgreSQL database created from:
+// - migrations/database.sql
+// - migrations/initial_migrations.sql
+//
+// PostgreSQL folded unquoted camelCase identifiers to lowercase, so Prisma
+// fields keep camelCase in TypeScript and map explicitly to DB columns.
+// Check constraints live in SQL only (Prisma does not model them).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int     @id @default(autoincrement())
+  email         String  @unique(map: "uq_users_email") @db.VarChar(255)
+  accountNumber String  @unique(map: "uq_users_account_number") @map("accountnumber") @db.VarChar(20)
+  orders        Order[]
+
+  @@map("users")
+}
+
+model Instrument {
+  id         Int          @id @default(autoincrement())
+  ticker     String       @unique(map: "uq_instruments_ticker") @db.VarChar(10)
+  name       String       @db.VarChar(255)
+  type       String       @db.VarChar(10)
+  orders     Order[]
+  marketData MarketData[]
+
+  @@map("instruments")
+}
+
+model Order {
+  id           Int      @id @default(autoincrement())
+  instrumentId Int      @map("instrumentid")
+  userId       Int      @map("userid")
+  size         Int
+  price        Decimal? @db.Decimal(10, 2)
+  type         String   @db.VarChar(10)
+  side         String   @db.VarChar(10)
+  status       String   @db.VarChar(20)
+  datetime     DateTime @db.Timestamp(6)
+
+  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user       User       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId, status], map: "idx_orders_user_status")
+  @@map("orders")
+}
+
+model MarketData {
+  id            Int      @id @default(autoincrement())
+  instrumentId  Int      @map("instrumentid")
+  high          Decimal? @db.Decimal(10, 2)
+  low           Decimal? @db.Decimal(10, 2)
+  open          Decimal? @db.Decimal(10, 2)
+  close         Decimal? @db.Decimal(10, 2)
+  previousClose Decimal? @map("previousclose") @db.Decimal(10, 2)
+  date          DateTime @db.Date
+
+  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([instrumentId, date], map: "uq_marketdata_instrument_date")
+  @@map("marketdata")
+}

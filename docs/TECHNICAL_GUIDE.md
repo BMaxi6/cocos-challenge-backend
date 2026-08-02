@@ -741,6 +741,8 @@ LIMIT 1
 
 que constituye una operación frecuente tanto para ejecutar órdenes `MARKET` como para valuar posiciones.
 
+> Decision: Como al final hicimos instrumentId y date en 1 solo UNIQUE. Ya se crea un indice B-tree
+
 #### Ticker
 
 Se utilizará:
