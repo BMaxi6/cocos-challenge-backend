@@ -1,7 +1,9 @@
-import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { createValidationPipe } from './common/pipes/validation.pipe';
+import { setupSwagger } from './common/swagger/setup-swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -10,13 +12,10 @@ async function bootstrap() {
   const apiPrefix = configService.get<string>('API_PREFIX', 'v1');
   app.setGlobalPrefix(apiPrefix);
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  app.useGlobalPipes(createValidationPipe());
+  app.useGlobalFilters(new GlobalExceptionFilter());
+
+  setupSwagger(app);
 
   const port = configService.get<number>('PORT', 3000);
   await app.listen(port);

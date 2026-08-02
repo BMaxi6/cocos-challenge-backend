@@ -19,7 +19,8 @@ npm run start:dev
 
 La API queda en `http://localhost:3000/v1`.
 
-Health check: `GET /v1/health`
+- Health check: `GET /v1/health`
+- Swagger: `http://localhost:3000/api/docs`
 
 ## Documentación
 
