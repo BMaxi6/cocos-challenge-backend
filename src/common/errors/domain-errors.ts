@@ -8,6 +8,12 @@ export class UserNotFoundError extends DomainError {
   }
 }
 
+export class InvalidUserIdError extends DomainError {
+  constructor(message = 'X-USER-ID header must be a positive integer') {
+    super(ErrorCode.INVALID_USER_ID, message, HttpStatus.BAD_REQUEST);
+  }
+}
+
 export class InstrumentNotFoundError extends DomainError {
   constructor(message = 'Instrument not found') {
     super(ErrorCode.INSTRUMENT_NOT_FOUND, message, HttpStatus.NOT_FOUND);
