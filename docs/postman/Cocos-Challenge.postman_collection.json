@@ -158,6 +158,206 @@
       ]
     },
     {
+      "name": "Portfolio",
+      "item": [
+        {
+          "name": "GET /v1/portfolio (user with orders)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('Portfolio shape', function () {",
+                  "  pm.expect(body).to.have.property('totalValue');",
+                  "  pm.expect(body).to.have.property('availableCash');",
+                  "  pm.expect(body).to.have.property('positions');",
+                  "  pm.expect(Array.isArray(body.positions)).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-USER-ID",
+                "value": "{{userId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/portfolio",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "portfolio"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /v1/portfolio (user without orders)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('Empty portfolio', function () {",
+                  "  pm.expect(body.totalValue).to.eql('0.00');",
+                  "  pm.expect(body.availableCash).to.eql('0.00');",
+                  "  pm.expect(body.positions).to.be.an('array').that.has.length(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-USER-ID",
+                "value": "{{userIdNoOrders}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/portfolio",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "portfolio"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /v1/portfolio without X-USER-ID -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('INVALID_USER_ID', function () {",
+                  "  pm.expect(body.code).to.eql('INVALID_USER_ID');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/portfolio",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "portfolio"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /v1/portfolio invalid X-USER-ID -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('INVALID_USER_ID', function () {",
+                  "  pm.expect(body.code).to.eql('INVALID_USER_ID');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-USER-ID",
+                "value": "abc"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/portfolio",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "portfolio"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /v1/portfolio unknown user -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', function () {",
+                  "  pm.response.to.have.status(404);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('USER_NOT_FOUND', function () {",
+                  "  pm.expect(body.code).to.eql('USER_NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-USER-ID",
+                "value": "{{missingUserId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/portfolio",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "portfolio"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Orders - Guard/Auth Errors",
       "item": [
         {
@@ -1151,6 +1351,10 @@
     {
       "key": "userId",
       "value": "1"
+    },
+    {
+      "key": "userIdNoOrders",
+      "value": "2"
     },
     {
       "key": "missingUserId",
