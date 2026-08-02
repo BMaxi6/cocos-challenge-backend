@@ -60,6 +60,7 @@ Fuera de scope:
 * Implementación de una proyección o snapshot del portfolio.
 * Infraestructura productiva de observabilidad y monitoreo.
 
+> Decision: La busqueda de instrumentos sin un search queda descartada. En ningun momento habla de poder realizar la consulta a /instruments y traer todos los instrumentos. Por el mismo motivo para mantenerlo simple decidi no implementar paginación en el endpoint.
 
 ## Principios y decisiones de diseño
 
