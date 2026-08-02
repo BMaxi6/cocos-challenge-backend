@@ -14,6 +14,18 @@ export class InvalidUserIdError extends DomainError {
   }
 }
 
+export class InvalidOrderInputError extends DomainError {
+  constructor(message = 'Order input is invalid') {
+    super(ErrorCode.INVALID_ORDER_INPUT, message, HttpStatus.BAD_REQUEST);
+  }
+}
+
+export class AmountTooLowError extends DomainError {
+  constructor(message = 'Amount is too low for the current price') {
+    super(ErrorCode.AMOUNT_TOO_LOW, message, HttpStatus.BAD_REQUEST);
+  }
+}
+
 export class InstrumentNotFoundError extends DomainError {
   constructor(message = 'Instrument not found') {
     super(ErrorCode.INSTRUMENT_NOT_FOUND, message, HttpStatus.NOT_FOUND);

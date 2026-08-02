@@ -27,3 +27,8 @@ La API queda en `http://localhost:3000/v1`.
 - [Consigna](docs/CONSIGNA.md)
 - [Guía técnica](docs/TECHNICAL_GUIDE.md)
 - [Diseño API REST](docs/API_REST.md)
+
+## Postman
+
+- Collection: `docs/postman/Cocos-Challenge.postman_collection.json`
+- Environment: `docs/postman/Cocos-Challenge-Local.postman_environment.json`
