@@ -28,8 +28,8 @@ export class PortfolioRepository {
       SELECT COALESCE(
         SUM(
           CASE
-            WHEN status = 'FILLED' AND side = 'CASH_IN' THEN (size * COALESCE(price, 1))
-            WHEN status = 'FILLED' AND side = 'CASH_OUT' THEN -(size * COALESCE(price, 1))
+            WHEN status = 'FILLED' AND side = 'CASH_IN' THEN size
+            WHEN status = 'FILLED' AND side = 'CASH_OUT' THEN -size
             WHEN status = 'FILLED' AND side = 'BUY' THEN -(size * price)
             WHEN status = 'FILLED' AND side = 'SELL' THEN (size * price)
             ELSE 0

@@ -100,6 +100,15 @@ Menor complejidad del modelo y consistencia conceptual entre efectivo y activos.
 
 ---
 
+### Decisión: interpretar `size` como monto en pesos para `CASH_IN` / `CASH_OUT`
+**Justificación**  
+Para este challenge, el efectivo está modelado exclusivamente mediante el instrumento ARS, cuyo valor nominal es el propio monto transferido. Por eso se interpreta `size` como la cantidad de pesos transferidos y no se depende de `price`, evitando introducir un dato redundante cuyo único valor sería `1`.
+
+**Impacto**  
+Los cálculos de disponibilidad y portfolio tratan `CASH_IN` / `CASH_OUT` solo con `size`, alineados con la consigna de usar esa columna para tenencia y pesos disponibles.
+
+---
+
 ### Decisión: `instruments.ticker` como `UNIQUE` y sin índice extra redundante
 **Justificación**  
 El ticker identifica naturalmente al instrumento en búsquedas/operación. La restricción `UNIQUE` ya crea índice B-Tree, por lo que agregar otro sobre la misma columna no aporta.
@@ -142,6 +151,15 @@ La consigna indica calcular tenencia, saldo y portfolio usando movimientos de `o
 
 **Impacto**  
 Trazabilidad completa de cómo se llega al portfolio y menor riesgo de desincronización.
+
+---
+
+### Decisión: no usar `previousClose` para el rendimiento del portfolio
+**Justificación**  
+Aunque `marketdata` contiene `previousClose`, no se utiliza para calcular el rendimiento del portfolio. Durante la resolución del challenge se consultó este punto y se implementó el rendimiento como `(marketValue - averageCost) / averageCost`, utilizando costo promedio ponderado.
+
+**Impacto**  
+El endpoint de portfolio expone rendimiento total de la posición respecto al costo de adquisición, no retorno diario.
 
 ---
 
