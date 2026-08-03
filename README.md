@@ -31,6 +31,7 @@ PRETTY_LOGS=false
 
 # PostgreSQL
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cocos_challenge?schema=public
+E2E_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cocos_challenge?schema=testing
 ```
 
 ### Logging
@@ -60,6 +61,9 @@ API base: `http://localhost:3000/v1`
 - ejecuta schema + seed
 - corre la suite
 - borra schema al finalizar (por default)
+
+Para evitar inconsistencias de schema en entornos con pooler,
+los tests e2e usan `E2E_DATABASE_URL`.
 
 Para preservar schema y auditar datos:
 

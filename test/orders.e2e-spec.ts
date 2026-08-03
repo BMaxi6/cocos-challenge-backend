@@ -1,17 +1,21 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { afterAll, beforeAll, describe, expect, it, jest } from '@jest/globals';
 import { PrismaClient } from '@prisma/client';
 import { readFileSync } from 'fs';
-import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { GlobalExceptionFilter } from '../src/common/filters/global-exception.filter';
 import { createValidationPipe } from '../src/common/pipes/validation.pipe';
 
 jest.setTimeout(120000);
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const request: typeof import('supertest') = require('supertest');
+
 function buildSchemaUrl(baseUrl: string, schema: string): string {
   const url = new URL(baseUrl);
   url.searchParams.set('schema', schema);
+  url.searchParams.set('options', `-c search_path=${schema},public`);
   return url.toString();
 }
 
@@ -54,7 +58,8 @@ describe('Orders functional (e2e)', () => {
   let testSchema: string;
   let filledOrderId: number;
 
-  const baseDatabaseUrl = process.env.DATABASE_URL;
+  const baseDatabaseUrl =
+    process.env.E2E_DATABASE_URL ?? process.env.DATABASE_URL;
   const keepTestSchema = ['1', 'true', 'yes'].includes(
     (process.env.KEEP_TEST_SCHEMA ?? '').toLowerCase(),
   );
@@ -85,7 +90,9 @@ describe('Orders functional (e2e)', () => {
 
   beforeAll(async () => {
     if (!baseDatabaseUrl) {
-      throw new Error('DATABASE_URL is required to run e2e tests');
+      throw new Error(
+        'E2E_DATABASE_URL (preferred) or DATABASE_URL is required to run e2e tests',
+      );
     }
 
     const createSchemaSql = readFileSync('migrations/database.sql', 'utf8');
@@ -130,7 +137,7 @@ describe('Orders functional (e2e)', () => {
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('v1');
     app.useGlobalPipes(createValidationPipe());
-    app.useGlobalFilters(new GlobalExceptionFilter());
+    app.useGlobalFilters(app.get(GlobalExceptionFilter));
     await app.init();
   });
 
@@ -339,6 +346,7 @@ describe('Orders functional (e2e)', () => {
       1,
       payload.instrumentId,
     );
+    expect(availableBefore).toBeGreaterThanOrEqual(payload.size);
     expect(availableBefore).toBeLessThan(payload.size * 2);
 
     const [first, second] = await Promise.all([
@@ -352,10 +360,17 @@ describe('Orders functional (e2e)', () => {
         .send(payload),
     ]);
 
-    expect([first.status, second.status]).toEqual([201, 201]);
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
 
     const outcomes = [first.body, second.body];
     const statusList = outcomes.map((order) => order.status).sort();
+    expect(statusList).toEqual(['NEW', 'REJECTED']);
+
+    const rejectedOrder = outcomes.find((order) => order.status === 'REJECTED');
+    expect(rejectedOrder).toBeDefined();
+    expect(rejectedOrder.rejectionReason).toBe('INSUFFICIENT_HOLDINGS');
+
     const reservedAfter = await testPrisma.order.aggregate({
       where: {
         userId: 1,
@@ -366,26 +381,6 @@ describe('Orders functional (e2e)', () => {
       },
       _sum: { size: true },
     });
-    const isPoolerConnection = (baseDatabaseUrl ?? '').includes('-pooler.');
-
-    // Con conexión directa esperamos serialización estricta (NEW + REJECTED).
-    // En modo pooler la simultaneidad puede no respetar el mismo lock de forma determinista.
-    if (isPoolerConnection) {
-      expect([
-        ['NEW', 'NEW'],
-        ['NEW', 'REJECTED'],
-      ]).toContainEqual(statusList);
-    } else {
-      expect(statusList).toEqual(['NEW', 'REJECTED']);
-
-      const rejected = outcomes.find((order) => order.status === 'REJECTED');
-      expect(rejected?.rejectionReason).toBe('INSUFFICIENT_HOLDINGS');
-    }
-
-    // Si hay dos NEW, las reservas efectivamente superan la disponibilidad inicial
-    // y documentan el comportamiento concurrente bajo pooler.
-    if (statusList[0] === 'NEW' && statusList[1] === 'NEW') {
-      expect(reservedAfter._sum.size ?? 0).toBeGreaterThan(availableBefore);
-    }
+    expect(reservedAfter._sum.size ?? 0).toBeLessThanOrEqual(availableBefore);
   });
 });
