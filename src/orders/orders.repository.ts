@@ -58,21 +58,21 @@ export class OrdersRepository {
     const [executedRow] = await tx.$queryRaw<
       { executedCash: Prisma.Decimal }[]
     >`
-      SELECT COALESCE(
-        SUM(
-          CASE
-            WHEN status = 'FILLED' AND side = 'CASH_IN' THEN (size * COALESCE(price, 1))
-            WHEN status = 'FILLED' AND side = 'CASH_OUT' THEN -(size * COALESCE(price, 1))
-            WHEN status = 'FILLED' AND side = 'BUY' THEN -(size * price)
-            WHEN status = 'FILLED' AND side = 'SELL' THEN (size * price)
-            ELSE 0
-          END
-        ),
-        0
-      )::numeric AS "executedCash"
-      FROM orders
-      WHERE userid = ${userId}
-    `;
+        SELECT COALESCE(
+          SUM(
+            CASE
+              WHEN status = 'FILLED' AND side = 'CASH_IN' THEN size
+              WHEN status = 'FILLED' AND side = 'CASH_OUT' THEN -size
+              WHEN status = 'FILLED' AND side = 'BUY' THEN -(size * price)
+              WHEN status = 'FILLED' AND side = 'SELL' THEN (size * price)
+              ELSE 0
+            END
+          ),
+          0
+        )::numeric AS "executedCash"
+        FROM orders
+        WHERE userid = ${userId}
+      `;
 
     // Efectivo reservado por BUY LIMIT en estado NEW (es del usuario, pero no operable).
     const [reservedRow] = await tx.$queryRaw<
