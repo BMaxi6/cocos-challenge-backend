@@ -88,6 +88,20 @@ describe('Orders functional (e2e)', () => {
     return row.availableQuantity;
   }
 
+  function parseMoney(value: string): number {
+    return Number(value);
+  }
+
+  function getPositionQuantity(
+    portfolio: { positions: Array<{ instrumentId: number; quantity: number }> },
+    instrumentId: number,
+  ): number {
+    const position = portfolio.positions.find(
+      (item) => item.instrumentId === instrumentId,
+    );
+    return position?.quantity ?? 0;
+  }
+
   beforeAll(async () => {
     if (!baseDatabaseUrl) {
       throw new Error(
@@ -382,5 +396,124 @@ describe('Orders functional (e2e)', () => {
       _sum: { size: true },
     });
     expect(reservedAfter._sum.size ?? 0).toBeLessThanOrEqual(availableBefore);
+  });
+
+  it('flujo integral: portfolio refleja reserva, fill y cancelación', async () => {
+    const userId = '1';
+    const instrumentId = 47;
+    const limitSize = 2;
+    const limitPrice = 1000;
+    const reservedCash = limitSize * limitPrice;
+
+    const initialPortfolio = await request(app.getHttpServer())
+      .get('/v1/portfolio')
+      .set('X-USER-ID', userId)
+      .expect(200);
+
+    const initialAvailableCash = parseMoney(
+      initialPortfolio.body.availableCash,
+    );
+    const initialTotalValue = parseMoney(initialPortfolio.body.totalValue);
+    const initialQuantity = getPositionQuantity(
+      initialPortfolio.body,
+      instrumentId,
+    );
+
+    const pendingLimitBuy = await request(app.getHttpServer())
+      .post('/v1/orders')
+      .set('X-USER-ID', userId)
+      .send({
+        instrumentId,
+        side: 'BUY',
+        type: 'LIMIT',
+        size: limitSize,
+        price: limitPrice,
+      })
+      .expect(201);
+
+    expect(pendingLimitBuy.body.status).toBe('NEW');
+
+    const portfolioAfterLimit = await request(app.getHttpServer())
+      .get('/v1/portfolio')
+      .set('X-USER-ID', userId)
+      .expect(200);
+
+    const availableCashAfterLimit = parseMoney(
+      portfolioAfterLimit.body.availableCash,
+    );
+    const totalValueAfterLimit = parseMoney(
+      portfolioAfterLimit.body.totalValue,
+    );
+    const quantityAfterLimit = getPositionQuantity(
+      portfolioAfterLimit.body,
+      instrumentId,
+    );
+
+    expect(availableCashAfterLimit).toBeCloseTo(
+      initialAvailableCash - reservedCash,
+      2,
+    );
+    expect(totalValueAfterLimit).toBeCloseTo(initialTotalValue, 2);
+    expect(quantityAfterLimit).toBe(initialQuantity);
+
+    const filledMarketBuy = await request(app.getHttpServer())
+      .post('/v1/orders')
+      .set('X-USER-ID', userId)
+      .send({
+        instrumentId,
+        side: 'BUY',
+        type: 'MARKET',
+        size: 1,
+      })
+      .expect(201);
+
+    expect(filledMarketBuy.body.status).toBe('FILLED');
+
+    const marketBuyPrice = parseMoney(filledMarketBuy.body.price);
+
+    const portfolioAfterMarketBuy = await request(app.getHttpServer())
+      .get('/v1/portfolio')
+      .set('X-USER-ID', userId)
+      .expect(200);
+
+    const availableCashAfterMarketBuy = parseMoney(
+      portfolioAfterMarketBuy.body.availableCash,
+    );
+    const quantityAfterMarketBuy = getPositionQuantity(
+      portfolioAfterMarketBuy.body,
+      instrumentId,
+    );
+
+    expect(availableCashAfterMarketBuy).toBeCloseTo(
+      availableCashAfterLimit - marketBuyPrice,
+      2,
+    );
+    expect(quantityAfterMarketBuy).toBe(initialQuantity + 1);
+
+    const cancelledLimitBuy = await request(app.getHttpServer())
+      .patch(`/v1/orders/${pendingLimitBuy.body.id}/cancel`)
+      .set('X-USER-ID', userId)
+      .expect(200);
+
+    expect(cancelledLimitBuy.body.status).toBe('CANCELLED');
+
+    const portfolioAfterCancel = await request(app.getHttpServer())
+      .get('/v1/portfolio')
+      .set('X-USER-ID', userId)
+      .expect(200);
+
+    const availableCashAfterCancel = parseMoney(
+      portfolioAfterCancel.body.availableCash,
+    );
+    const quantityAfterCancel = getPositionQuantity(
+      portfolioAfterCancel.body,
+      instrumentId,
+    );
+
+    expect(availableCashAfterCancel).toBeCloseTo(
+      availableCashAfterMarketBuy + reservedCash,
+      2,
+    );
+    expect(quantityAfterCancel).toBe(quantityAfterMarketBuy);
   });
 });
