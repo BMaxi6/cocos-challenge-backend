@@ -43,3 +43,13 @@ export class OrderNotCancellableError extends DomainError {
     super(ErrorCode.ORDER_NOT_CANCELLABLE, message, HttpStatus.CONFLICT);
   }
 }
+
+export class FilledOrderMissingPriceError extends DomainError {
+  constructor(orderId: number) {
+    super(
+      ErrorCode.FILLED_ORDER_MISSING_PRICE,
+      `Filled order ${orderId} is missing price`,
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+  }
+}

@@ -17,6 +17,9 @@ import {
   OrderSide,
   OrderStatus,
   OrderType,
+  parseMovementSide,
+  parseOrderStatus,
+  parseOrderType,
 } from './types/order.types';
 
 @Injectable()
@@ -48,18 +51,18 @@ export class OrdersService {
           dto.price,
         );
 
-        const size = this.resolveOrderSize(dto, executionPrice);
         const now = new Date();
 
         if (executionPrice === null) {
-          // La orden es válida, pero no ejecutable por falta de precio de mercado:
-          // se persiste REJECTED y se responde 201 con motivo.
+          // Sin precio: rechazo de negocio (no input inválido).
+          // amount sin precio no permite derivar size; 1 solo cumple size > 0.
+          // REJECTED no afecta cash ni posiciones.
           const rejectedOrder = await this.ordersRepository.createOrder(tx, {
             instrumentId: dto.instrumentId,
             userId: user.id,
             side: dto.side,
             type: dto.type,
-            size,
+            size: dto.size ?? 1,
             price: null,
             status: 'REJECTED',
             datetime: now,
@@ -70,6 +73,8 @@ export class OrdersService {
             rejectionReason: 'MARKET_PRICE_NOT_AVAILABLE',
           };
         }
+
+        const size = this.resolveOrderSize(dto, executionPrice);
 
         const rejectionReason = await this.validateAvailability(
           tx,
@@ -177,16 +182,10 @@ export class OrdersService {
 
   private resolveOrderSize(
     dto: CreateOrderDto,
-    executionPrice: Prisma.Decimal | null,
+    executionPrice: Prisma.Decimal,
   ): number {
     if (dto.size !== undefined) {
       return dto.size;
-    }
-
-    if (!executionPrice) {
-      throw new InvalidOrderInputError(
-        'Cannot compute size from amount when market price is not available',
-      );
     }
 
     // Para amount se usa floor(amount/price): nunca se compran fracciones
@@ -234,11 +233,11 @@ export class OrdersService {
     return {
       id: result.order.id,
       instrumentId: result.order.instrumentId,
-      side: result.order.side,
-      type: result.order.type,
+      side: parseMovementSide(result.order.side),
+      type: parseOrderType(result.order.type),
       size: result.order.size,
       price: result.order.price ? result.order.price.toFixed(2) : null,
-      status: result.order.status,
+      status: parseOrderStatus(result.order.status),
       datetime: result.order.datetime.toISOString(),
       rejectionReason: result.rejectionReason,
     };

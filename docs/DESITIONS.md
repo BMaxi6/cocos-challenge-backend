@@ -80,6 +80,16 @@ El request crea un recurso `order` persistido con resultado de negocio explícit
 **Impacto**  
 Contrato consistente y auditable: toda intención de orden queda registrada en `orders`.
 
+---
+
+### Decisión: ausencia de precio de mercado es rechazo de negocio, también con `amount`
+**Justificación**  
+Si no hay `close` disponible, la orden MARKET no puede ejecutarse. Eso aplica tanto con `size` como con `amount`: no es input inválido (`400`), sino `REJECTED` con `rejectionReason = MARKET_PRICE_NOT_AVAILABLE` y respuesta `201`.  
+Cuando solo se envía `amount`, el `size` no es derivable sin precio. El esquema exige `size > 0`, así que se persiste `size = 1` únicamente para cumplir la constraint; al quedar `REJECTED`, no afecta cash ni posiciones.
+
+**Impacto**  
+Mismo contrato HTTP/negocio para ambos modos de cantidad. El `size = 1` en el caso `amount` sin precio es un placeholder técnico, no una cantidad operada.
+
 ## 4) Modelo de datos e integridad
 
 ### Decisión: `users.email` y `users.accountNumber` deben ser `UNIQUE`
@@ -160,6 +170,16 @@ Aunque `marketdata` contiene `previousClose`, no se utiliza para calcular el ren
 
 **Impacto**  
 El endpoint de portfolio expone rendimiento total de la posición respecto al costo de adquisición, no retorno diario.
+
+---
+
+### Decisión: una orden `FILLED` sin `price` es invariante roto
+**Justificación**  
+Las órdenes `BUY`/`SELL` en estado `FILLED` participan del costo promedio y del portfolio. Un `price` nulo no es un caso de negocio válido (p. ej. “orden gratis”): distorsionaría `averageCost` y el rendimiento si se tratara como `0`.  
+Si aparece, el portfolio responde `500` con `FILLED_ORDER_MISSING_PRICE` en lugar de inventar un precio.
+
+**Impacto**  
+Se prioriza no mentir en el portfolio frente a degradar el cálculo con datos corruptos. Con la API actual y el seed del challenge no debería ocurrir.
 
 ---
 

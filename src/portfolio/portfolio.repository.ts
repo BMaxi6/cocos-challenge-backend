@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { Order, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { OrderSide, parseOrderSide } from '../orders/types/order.types';
 
-type FilledStockOrder = Pick<
-  Order,
-  'instrumentId' | 'side' | 'size' | 'price' | 'datetime' | 'id'
-> & {
+type FilledStockOrder = {
+  id: number;
+  instrumentId: number;
+  side: OrderSide;
+  size: number;
+  price: Prisma.Decimal | null;
+  datetime: Date;
   instrument: {
     id: number;
     ticker: string;
@@ -22,44 +26,44 @@ export class PortfolioRepository {
     executedCash: Prisma.Decimal;
     availableCash: Prisma.Decimal;
   }> {
-    const [executedRow] = await this.prisma.$queryRaw<
-      { executedCash: Prisma.Decimal }[]
+    const [row] = await this.prisma.$queryRaw<
+      { executedCash: Prisma.Decimal; reservedCash: Prisma.Decimal }[]
     >`
-      SELECT COALESCE(
-        SUM(
-          CASE
-            WHEN status = 'FILLED' AND side = 'CASH_IN' THEN size
-            WHEN status = 'FILLED' AND side = 'CASH_OUT' THEN -size
-            WHEN status = 'FILLED' AND side = 'BUY' THEN -(size * price)
-            WHEN status = 'FILLED' AND side = 'SELL' THEN (size * price)
-            ELSE 0
-          END
-        ),
-        0
-      )::numeric AS "executedCash"
+      SELECT
+        COALESCE(
+          SUM(
+            CASE
+              WHEN status = 'FILLED' AND side = 'CASH_IN' THEN size
+              WHEN status = 'FILLED' AND side = 'CASH_OUT' THEN -size
+              WHEN status = 'FILLED' AND side = 'BUY' THEN -(size * price)
+              WHEN status = 'FILLED' AND side = 'SELL' THEN (size * price)
+              ELSE 0
+            END
+          ),
+          0
+        )::numeric AS "executedCash",
+        COALESCE(
+          SUM(
+            CASE
+              WHEN status = 'NEW' AND type = 'LIMIT' AND side = 'BUY'
+                THEN size * price
+              ELSE 0
+            END
+          ),
+          0
+        )::numeric AS "reservedCash"
       FROM orders
       WHERE userid = ${userId}
-    `;
-
-    const [reservedRow] = await this.prisma.$queryRaw<
-      { reservedCash: Prisma.Decimal }[]
-    >`
-      SELECT COALESCE(SUM(size * price), 0)::numeric AS "reservedCash"
-      FROM orders
-      WHERE userid = ${userId}
-        AND status = 'NEW'
-        AND type = 'LIMIT'
-        AND side = 'BUY'
     `;
 
     return {
-      executedCash: executedRow.executedCash,
-      availableCash: executedRow.executedCash.minus(reservedRow.reservedCash),
+      executedCash: row.executedCash,
+      availableCash: row.executedCash.minus(row.reservedCash),
     };
   }
 
-  getFilledStockOrders(userId: number): Promise<FilledStockOrder[]> {
-    return this.prisma.order.findMany({
+  async getFilledStockOrders(userId: number): Promise<FilledStockOrder[]> {
+    const rows = await this.prisma.order.findMany({
       where: {
         userId,
         status: 'FILLED',
@@ -88,6 +92,11 @@ export class PortfolioRepository {
       },
       orderBy: [{ instrumentId: 'asc' }, { datetime: 'asc' }, { id: 'asc' }],
     });
+
+    return rows.map((row) => ({
+      ...row,
+      side: parseOrderSide(row.side),
+    }));
   }
 
   async getLatestMarketPrices(
@@ -97,26 +106,19 @@ export class PortfolioRepository {
       return new Map();
     }
 
-    const rows = await this.prisma.marketData.findMany({
-      where: {
-        instrumentId: { in: instrumentIds },
-        close: { not: null },
-      },
-      select: {
-        instrumentId: true,
-        close: true,
-        date: true,
-      },
-      orderBy: [{ instrumentId: 'asc' }, { date: 'desc' }],
-    });
+    // DISTINCT ON aprovecha uq_marketdata_instrument_date (instrumentid, date).
+    const rows = await this.prisma.$queryRaw<
+      { instrumentId: number; close: Prisma.Decimal }[]
+    >`
+      SELECT DISTINCT ON (instrumentid)
+             instrumentid AS "instrumentId",
+             close
+      FROM marketdata
+      WHERE instrumentid = ANY(${instrumentIds})
+        AND close IS NOT NULL
+      ORDER BY instrumentid, date DESC
+    `;
 
-    const latest = new Map<number, Prisma.Decimal>();
-    for (const row of rows) {
-      if (!latest.has(row.instrumentId) && row.close) {
-        latest.set(row.instrumentId, row.close);
-      }
-    }
-
-    return latest;
+    return new Map(rows.map((row) => [row.instrumentId, row.close]));
   }
 }

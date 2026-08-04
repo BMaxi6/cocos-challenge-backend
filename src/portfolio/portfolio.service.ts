@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { FilledOrderMissingPriceError } from '../common/errors';
 import {
   PortfolioPositionDto,
   PortfolioResponseDto,
@@ -29,7 +30,11 @@ export class PortfolioService {
     >();
 
     for (const order of filledOrders) {
-      const price = order.price ?? new Prisma.Decimal(0);
+      if (order.price == null) {
+        throw new FilledOrderMissingPriceError(order.id);
+      }
+
+      const price = order.price;
       const existing = stateByInstrument.get(order.instrumentId) ?? {
         instrumentId: order.instrumentId,
         ticker: order.instrument.ticker,

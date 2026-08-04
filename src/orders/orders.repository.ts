@@ -1,17 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { Order, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { OrderSide, OrderStatus, OrderType } from './types/order.types';
 
 type TransactionCallback<T> = (tx: Prisma.TransactionClient) => Promise<T>;
 
 type CreateOrderInput = {
   instrumentId: number;
   userId: number;
-  side: string;
-  type: string;
+  side: OrderSide;
+  type: OrderType;
   size: number;
   price: Prisma.Decimal | null;
-  status: string;
+  status: OrderStatus;
   datetime: Date;
 };
 
@@ -54,39 +55,27 @@ export class OrdersRepository {
     tx: Prisma.TransactionClient,
     userId: number,
   ): Promise<Prisma.Decimal> {
-    // Efectivo ejecutado: saldo resultante de movimientos FILLED.
-    const [executedRow] = await tx.$queryRaw<
-      { executedCash: Prisma.Decimal }[]
-    >`
-        SELECT COALESCE(
-          SUM(
-            CASE
-              WHEN status = 'FILLED' AND side = 'CASH_IN' THEN size
-              WHEN status = 'FILLED' AND side = 'CASH_OUT' THEN -size
-              WHEN status = 'FILLED' AND side = 'BUY' THEN -(size * price)
-              WHEN status = 'FILLED' AND side = 'SELL' THEN (size * price)
-              ELSE 0
-            END
-          ),
-          0
-        )::numeric AS "executedCash"
-        FROM orders
-        WHERE userid = ${userId}
-      `;
-
-    // Efectivo reservado por BUY LIMIT en estado NEW (es del usuario, pero no operable).
-    const [reservedRow] = await tx.$queryRaw<
-      { reservedCash: Prisma.Decimal }[]
-    >`
-      SELECT COALESCE(SUM(size * price), 0)::numeric AS "reservedCash"
+    // availableCash = executedCash - reservedCash (BUY LIMIT NEW).
+    const [row] = await tx.$queryRaw<{ availableCash: Prisma.Decimal }[]>`
+      SELECT COALESCE(
+        SUM(
+          CASE
+            WHEN status = 'FILLED' AND side = 'CASH_IN' THEN size
+            WHEN status = 'FILLED' AND side = 'CASH_OUT' THEN -size
+            WHEN status = 'FILLED' AND side = 'BUY' THEN -(size * price)
+            WHEN status = 'FILLED' AND side = 'SELL' THEN (size * price)
+            WHEN status = 'NEW' AND type = 'LIMIT' AND side = 'BUY'
+              THEN -(size * price)
+            ELSE 0
+          END
+        ),
+        0
+      )::numeric AS "availableCash"
       FROM orders
       WHERE userid = ${userId}
-        AND status = 'NEW'
-        AND type = 'LIMIT'
-        AND side = 'BUY'
     `;
 
-    return executedRow.executedCash.minus(reservedRow.reservedCash);
+    return row.availableCash;
   }
 
   async getAvailableQuantity(
@@ -138,7 +127,7 @@ export class OrdersRepository {
   updateOrderStatus(
     tx: Prisma.TransactionClient,
     orderId: number,
-    status: string,
+    status: OrderStatus,
   ): Promise<Order> {
     return tx.order.update({
       where: { id: orderId },
